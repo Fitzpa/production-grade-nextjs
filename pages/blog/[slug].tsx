@@ -6,6 +6,12 @@ import { useRouter } from 'next/router'
 import { Post } from '../../types'
 import Container from '../../components/container'
 import HomeNav from '../../components/homeNav'
+import path from 'path'
+import fs from 'fs'
+import matter from 'gray-matter'
+import { posts } from '../../content'
+import renderToString from 'next-mdx-remote/render-to-string'
+
 
 const BlogPost: FC<Post> = ({ source, frontMatter }) => {
   const content = hydrate(source)
@@ -44,9 +50,51 @@ BlogPost.defaultProps = {
   frontMatter: { title: 'default title', summary: 'summary', publishedOn: '' },
 }
 
+// gets all the possible routes for these dynamic paths on server side (Run at build time)
+export function getStaticPaths() {
+  const postsPath = path.join(process.cwd(), 'posts')
+  const fileNames = fs.readdirSync(postsPath)
+  const slugs = fileNames.map(name => {
+    const filePath = path.join(postsPath, name)
+    const file = fs.readFileSync(filePath, 'utf-8')
+    const { data } = matter(file)
+    return data
+  })
+
+  // fallback true allows us to attempt to render a path that wasn't built at build time 
+  return {
+    paths: slugs.map(s => ({params: { slug: s.slug }})),
+    fallback: true
+  }
+}
 /**
  * Need to get the paths here
  * then the the correct post for the matching path
  * Posts can come from the fs or our CMS
  */
+
+export async function getStaticProps({ params, preview }) {
+  let post
+  try {
+    const filesPath = path.join(process.cwd(), 'posts', `${params.slug}` + '.mdx')
+    post = fs.readFileSync(filesPath, 'utf-8')
+  } catch {
+    const cmsPosts = (preview ? posts.draft : posts.published).map(p => {
+      return matter(p)
+    })
+
+    const match = cmsPosts.find(p => p.data.slug === params.slug)
+    post = match.content
+  }
+  const { data } = matter(post)
+  const mdxSource = await renderToString(post, {scope: data})
+
+  return {
+    props: {
+      source: mdxSource,
+      frontMatter: data,
+    }
+  }
+}
+
 export default BlogPost

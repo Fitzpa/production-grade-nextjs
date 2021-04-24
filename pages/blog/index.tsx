@@ -32,6 +32,31 @@ Blog.defaultProps = {
   posts: [],
 }
 
+export function getStaticProps(ctx) {
+  // posts from CMS
+  const cmsPosts = (ctx.preview ? postsFromCMS.draft : postsFromCMS.published).map(post => {
+    // This will turn our MDX posts into a JSON object
+    const { data } = matter(post)
+    return data
+  })
+  
+  // posts from local folder or MDX files
+  const postsPath = path.join(process.cwd(), 'posts')
+  const fileNames = fs.readdirSync(postsPath)
+  const filePosts = fileNames.map(name => {
+    const fullPath = path.join(process.cwd(), 'posts', name)
+    const file = fs.readFileSync(fullPath, 'utf-8')
+    // This will turn our MDX posts into a JSON object
+    const { data } = matter(file)
+    return data
+  })
+
+  const posts = [...cmsPosts, ...filePosts]
+  return {
+    props: { posts }
+  }
+}
+
 export default Blog
 
 /**
